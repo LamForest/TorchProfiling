@@ -52,9 +52,12 @@ def module_hook(fullname, module):
         module.distributed.all_gather = func_torch_distributed_wrapper(
             module.distributed.all_gather
         )
-        # module.distributed._allgather_base= func_torch_distributed_wrapper(
-        #     module.distributed._allgather_base
-        # )
+        module.distributed.all_gather_into_tensor= func_torch_distributed_wrapper(
+            module.distributed.all_gather_into_tensor
+        )
+        module.distributed.all_to_all_single= func_torch_distributed_wrapper(
+            module.distributed.all_to_all_single
+        )
         module.distributed.gather = func_torch_distributed_wrapper(
             module.distributed.gather
         )
@@ -114,6 +117,13 @@ class DistInfoGenerator(object):
         return None
 
     @staticmethod
+    def gen_all_to_all_single(args, kwargs):
+        # tensor = get_param(args, kwargs, 0, "tensor")
+        # if tensor is not None:
+        #     return gen_bytes_str(tensor)
+        return None
+
+    @staticmethod
     def gen_all_reduce(args, kwargs):
         tensor = get_param(args, kwargs, 0, "tensor")
         if tensor is not None:
@@ -132,7 +142,7 @@ class DistInfoGenerator(object):
         return None
 
     @staticmethod
-    def gen__allgather_base(args, kwargs):
+    def gen_all_gather_into_tensor(args, kwargs):
         tensor = get_param(args, kwargs, 0, "output_tensor")
         if tensor is not None:
             return gen_bytes_str(tensor)

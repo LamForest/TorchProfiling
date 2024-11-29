@@ -138,6 +138,11 @@ class OpInfoBase(object):
     def get_module_name(self):
         return self.module_name
 
+    def __str__(self) -> str:
+        return f"{self._name_=} {self.module_name=} {self._time_=}"
+    def __repr__(self) -> str:
+        return f"{self._name_=} {self.module_name=} {self._time_=}"
+
 
 # record AtenOp info
 class AtenOp(OpInfoBase):
@@ -392,28 +397,32 @@ class AtenOpAnalyzer(Analyzer):
         if (
             self.collection_state == STATE.FORMAL
             or self.collection_state == STATE.MODULE
-        ) and "[START_SYMBOL]" in line:
+        # ) and "[START_SYMBOL]" in line:
+        ) and "[START_SYMBOL]" in line: #dist op也属于op
+            # print(f"identify_op_start ", line)
             Logger.debug("Op Start")
             if "c10d" in line:
                 return False
             else:
                 self.collection_state = STATE.OP
-            self.current_op_name = line.rstrip("\n").split(":")[-1].replace("_", " ")
+            # self.current_op_name = line.rstrip("\n").split(":")[-1].replace("_", " ")
+            self.current_op_name = line.rstrip("\n").split(":")[-1]
             self.current_op = AtenOp(self.current_op_name, self.current_m_name)
             return True
-        elif (
-            self.collection_state == STATE.FORMAL
-            or self.collection_state == STATE.MODULE
-        ) and "[DIST START_SYMBOL]" in line:
-            if "[DIST START_SYMBOL]" in line:
-                self.collection_state = STATE.DISTOP
-            self.current_op_name = line.rstrip("\n").split(":")[-1].replace("_", " ")
-            self.current_op = AtenOp(self.current_op_name, self.current_m_name)
-            return True
+        # elif (
+        #     self.collection_state == STATE.FORMAL
+        #     or self.collection_state == STATE.MODULE
+        # ) and "[DIST START_SYMBOL]" in line:
+        #     if "[DIST START_SYMBOL]" in line:
+        #         self.collection_state = STATE.DISTOP
+        #     self.current_op_name = line.rstrip("\n").split(":")[-1].replace("_", " ")
+        #     self.current_op = AtenOp(self.current_op_name, self.current_m_name)
+        #     return True
 
         return False
 
     def identify_op_end(self, line: str):
+        # if self.collection_state == STATE.OP and "[END_SYMBOL]" in line:
         if self.collection_state == STATE.OP and "[END_SYMBOL]" in line:
             Logger.debug("Op End")
             self.total += self.current_op.get_time()
@@ -421,22 +430,23 @@ class AtenOpAnalyzer(Analyzer):
                 self.current_module.add_elem(self.current_op)
             else:
                 self.op_or_module.append(self.current_op)
+            # print(f"identify_op_end, op_or_module append {self.current_op=}, {line=}")
             self.current_op = None
             self.collection_state = (
                 STATE.FORMAL if self.current_module is None else STATE.MODULE
             )
             return True
-        elif self.collection_state == STATE.DISTOP and "[DIST END_SYMBOL]" in line:
-            Logger.debug("DIST Op End")
-            if self.current_module is not None:
-                self.current_module.add_elem(self.current_op)
-            else:
-                self.op_or_module.append(self.current_op)
-            self.current_op = None
-            self.collection_state = (
-                STATE.FORMAL if self.current_module is None else STATE.MODULE
-            )
-            return True
+        # elif self.collection_state == STATE.DISTOP and "[DIST END_SYMBOL]" in line:
+        #     Logger.debug("DIST Op End")
+        #     if self.current_module is not None:
+        #         self.current_module.add_elem(self.current_op)
+        #     else:
+        #         self.op_or_module.append(self.current_op)
+        #     self.current_op = None
+        #     self.collection_state = (
+        #         STATE.FORMAL if self.current_module is None else STATE.MODULE
+        #     )
+            # return True
 
         return False
 
@@ -463,6 +473,8 @@ class AtenOpAnalyzer(Analyzer):
                 self.total += extention_op_time
                 self.current_op = None
             return True
+        elif "[XPURT_PROF]" in line:
+            assert False, line
         return False
 
     def analysis(self):
@@ -504,14 +516,78 @@ class AtenOpAnalyzer(Analyzer):
                 final_list.append(elem)
 
         table = pt.PrettyTable(["Module", "Aten Op", "Time"])
+        last_module = final_list[0].get_module_name()
+        last_module_total = 0.0
+        from collections import defaultdict
+        module_total = defaultdict(float)
         for elem in final_list:
+            if elem.get_module_name() != last_module:
+                table.add_row(["---------------", "", f"sum={last_module_total}"])
+                # assert last_module not in module_total, f"{last_module} already in module_total"
+                module_total[last_module] += last_module_total
+                last_module_total = 0
+                last_module = elem.get_module_name()
+                
+                
+                
             table.add_row(
                 [
-                    fill(elem.get_module_name(), width=50),
+                    # fill(elem.get_module_name(), width=50),
+                    elem.get_module_name(),
                     elem.get_name(),
                     elem.get_time(),
                 ]
             )
+            last_module_total += elem.get_time()
+        # assert last_module not in module_total
+        module_total[last_module] += last_module_total
+        
+        # import ipdb
+        # ipdb.set_trace()
+        
+        sorted_table = pt.PrettyTable(
+            [
+                "Index",
+                "Module",
+                "Time(ms)",
+                "Percent(%)",
+            ]
+        )
+        
+        
+        sorted_module = dict(sorted(module_total.items(), key=lambda item: item[1], reverse=True))
+        total_time = 0
+        for i, (k, v) in enumerate(sorted_module.items()):
+            # print(f"{i} : {k} : {v}, {v / self.get_total() * 100} %")
+            sorted_table.add_row(
+                [
+                    i+1,
+                    k,
+                    v,
+                    f"{v / self.get_total() * 100} %",
+                ]
+            )
+            total_time += v
+        
+        sorted_table.add_row(
+                [
+                    "",
+                    "Total",
+                    total_time,
+                    f"100%",
+                ]
+            )
+    
+        assert abs(total_time - self.get_total()) < 1e-6, f"{total_time} != {self.get_total()}"
+        
+        sorted_table.set_style(pt.DEFAULT)
+        sorted_table.align = "l"
+        print("================= sorted by module time ================")
+        print(sorted_table)
+        print("\n")
+        # import pprint
+        # pprint.pprint(sorted_module)
+            
         table.set_style(pt.DEFAULT)
         table.align = "l"
         return table
@@ -550,11 +626,14 @@ class AtenOpAnalyzer(Analyzer):
                 "Percent(%)",
             ]
         )
+        total_time = 0.0
+        
         for op in op_list:
-            percent = op[1].get_total_time() / self.get_total()
+            percent = op[1].get_total_time() / self.get_total() * 100
             table.add_row(
                 [
-                    fill(op[0], width=40),
+                    # fill(op[0], width=40),
+                    op[0],
                     op[1].get_max(),
                     op[1].get_min(),
                     op[1].get_avg(),
@@ -563,6 +642,11 @@ class AtenOpAnalyzer(Analyzer):
                     percent,
                 ]
             )
+            total_time += op[1].get_total_time()
+            
+        table.add_row(["-------Total--------", "", "", "", total_time, "", f"100%"])
+
+        assert abs(total_time - self.get_total()) < 1e-6, f"{total_time} != {self.get_total()}"
         table.align = "l"
         return table
 
