@@ -119,7 +119,7 @@ class LocalModule(object):
 
 
 class OpInfoBase(object):
-    def __init__(self, name="", m_name="", time=0) -> None:
+    def __init__(self, name, m_name, time) -> None:
         self._name_ = name
         self.module_name = m_name
         self._time_ = time
@@ -146,7 +146,7 @@ class OpInfoBase(object):
 
 # record AtenOp info
 class AtenOp(OpInfoBase):
-    def __init__(self, name="", m_name="", time=0) -> None:
+    def __init__(self, name="unknown_op", m_name="unknown_module", time=0) -> None:
         super().__init__(name, m_name, time)
 
 
@@ -520,6 +520,7 @@ class AtenOpAnalyzer(Analyzer):
         last_module_total = 0.0
         from collections import defaultdict
         module_total = defaultdict(float)
+        module_details = defaultdict(dict)
         for elem in final_list:
             if elem.get_module_name() != last_module:
                 table.add_row(["---------------", "", f"sum={last_module_total}"])

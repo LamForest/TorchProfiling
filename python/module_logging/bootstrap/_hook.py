@@ -205,6 +205,7 @@ def func_torch_distributed_wrapper(func):
                 return result
             else:
                 result = func(*args, **kwargs)
+                return result
         else:
             assert False, "func:{} is not callable".format(func)
 
